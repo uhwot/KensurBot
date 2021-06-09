@@ -27,6 +27,7 @@ from requests import get
 from userbot import CMD_HELP
 from userbot.events import register
 
+
 @register(outgoing=True, pattern=r"^\.ip")
 async def ip(args):
     try:
@@ -63,6 +64,7 @@ async def ip(args):
         text = text + f"**{key}:** `{value}`\n"
 
     await args.edit(text)
+
 
 CMD_HELP.update(
     {
