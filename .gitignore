@@ -8,3 +8,4 @@ userbot/modules/__pycache__/*
 userbot/modules/sql_helper/__pycache__/*
 .progress
 .vscode/*
+venv/*
