@@ -28,7 +28,7 @@ from requests import get
 from requests.models import HTTPError
 from telethon.tl.types import DocumentAttributeAudio
 
-from userbot import TEMP_DOWNLOAD_DIRECTORY
+from userbot import CMD_HELP, TEMP_DOWNLOAD_DIRECTORY
 from userbot.events import register
 
 from binascii import hexlify
@@ -211,3 +211,11 @@ async def dz(event):
     await event.delete()
 
     os.remove(trk_path)
+
+
+CMD_HELP.update(
+    {
+        "dz": ">`.dz <track id> <format>`"
+        "\nUsage: Download tracks from Deezer. Valid formats: 128, 320, flac, misc"
+    }
+)
