@@ -81,8 +81,8 @@ async def get_access_token():
         return (await get_json(TOKEN_URL))["access_token"]
 
     token = gvarstatus("dz_token")
-    expiry = float(gvarstatus("dz_token_expiry"))
-    if not token or not expiry or expiry <= time():
+    expiry = gvarstatus("dz_token_expiry")
+    if not token or not expiry or float(expiry) <= time():
         # getting new token from deezer and caching
         resp = await get_json(TOKEN_URL)
         token = resp["access_token"]
