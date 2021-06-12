@@ -79,7 +79,7 @@ async def get_access_token():
         from userbot.modules.sql_helper.globals import gvarstatus, addgvar
     except AttributeError:  # sql disabled
         return (await get_json(TOKEN_URL))["access_token"]
-    
+
     token = gvarstatus("dz_token")
     expiry = float(gvarstatus("dz_token_expiry"))
     if not token or not expiry or expiry <= time():
@@ -89,7 +89,7 @@ async def get_access_token():
         expiry = time() + int(resp["expires"])
         addgvar("dz_token", token)
         addgvar("dz_token_expiry", expiry)
-    
+
     return token
 
 
