@@ -30,7 +30,7 @@ Pillow
 psycopg2
 psycopg2-binary
 pybase64
-pycryptodomex
+pycryptodome
 pyfiglet
 PyGithub
 pylast

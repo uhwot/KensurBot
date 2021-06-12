@@ -26,13 +26,14 @@ from time import time
 
 from requests import get
 from requests.models import HTTPError
+from telethon.tl.types import DocumentAttributeAudio
 
 from userbot import TEMP_DOWNLOAD_DIRECTORY
 from userbot.events import register
 
 from binascii import hexlify
-from Cryptodome.Hash import MD5
-from Cryptodome.Cipher import AES
+from Crypto.Hash import MD5
+from Crypto.Cipher import AES
 
 API = "https://api.deezer.com/"
 
@@ -135,9 +136,15 @@ async def download_file(url, id, format):
 
 @register(outgoing=True, pattern=r"\.dz (.*) (misc|128|320|flac)")
 async def dz(event):
+    try:
+        id = int(event.pattern_match.group(1))
+    except ValueError:
+        await event.edit("**Invalid track ID.**")
+        return
+
     await event.edit("**Getting track info...**")
 
-    api_path = f"track/{event.pattern_match.group(1)}"
+    api_path = f"track/{id}"
     try:
         resp = await api_call(api_path)
     except Exception as e:
@@ -170,11 +177,34 @@ async def dz(event):
 
     await event.edit("**Uploading...**")
 
+    attributes = [
+        DocumentAttributeAudio(
+            duration=resp["duration"],
+            voice=False,
+            title=resp["title"],
+            performer=resp["artist"]["name"],
+            waveform=None,
+        )
+    ]
+
+    cover = None
+    md5_image = resp["md5_image"]
+    if md5_image != "":
+        url = f"https://cdns-images.dzcdn.net/images/cover/{md5_image}/320x320-000000-80-0-0.jpg"
+        cover = get(url)
+        try:
+            cover.raise_for_status()
+        except HTTPError:
+            await event.edit("**Error while getting cover.**")
+            return
+        cover = cover.content
+
     await event.client.send_file(
         event.chat_id,
         trk_path,
-        caption=f"**{resp['artist']['name']} - {resp['title']}**",
         file_size=int(filesize),
+        attributes=attributes,
+        thumb=cover,
         supports_streaming=True,
     )
 
