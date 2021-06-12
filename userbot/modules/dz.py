@@ -33,13 +33,18 @@ from binascii import hexlify
 from Cryptodome.Hash import MD5
 from Cryptodome.Cipher import AES
 
+API = "https://api.deezer.com/"
+
 CLIENT_ID = "119915"
 CLIENT_SECRET = "2f5b4c9785ddc367975b83d90dc46f5c"
+
+TOKEN_URL = f"https://connect.deezer.com/oauth/access_token.php?grant_type=client_credentials&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}&output=json"
 
 FORMATS = {
     "flac": "9",
     "320": "3",
     "128": "1",
+    "misc": "0",
 }
 
 
@@ -56,21 +61,30 @@ class APIError(Error):
 
 
 async def get_json(url):
-    res = get(url)
-    res.raise_for_status()
-    res = res.json()
+    resp = get(url)
+    resp.raise_for_status()
+    resp = resp.json()
 
     try:
-        error = res["error"]
+        error = resp["error"]
         raise APIError(error["type"], error["message"])
     except KeyError:
-        return res
+        return resp
 
 
-async def track_url(md5_origin, format, id, media_version):
+async def get_access_token():
+    return (await get_json(TOKEN_URL))["access_token"]
+
+
+async def api_call(path):
+    url = API + path + f"?access_token={await get_access_token()}"
+    return await get_json(url)
+
+
+async def track_url(md5_origin, format_num, id, media_version):
     # mashing a bunch of metadata and hashing it with MD5
     info = b"\xa4".join(
-        [i.encode() for i in [md5_origin, format, str(id), str(media_version)]]
+        [i.encode() for i in [md5_origin, format_num, str(id), str(media_version)]]
     )
     hash = MD5.new(info).hexdigest()
 
@@ -89,49 +103,51 @@ async def track_url(md5_origin, format, id, media_version):
     return f"https://cdns-proxy-{md5_origin[0]}.dzcdn.net/api/1/{result.decode()}"
 
 
-async def download_file(url, id):
-    trk_path = os.path.join(TEMP_DOWNLOAD_DIRECTORY, f"{str(id)}.mp3")
+async def download_file(url, id, format):
+    ext = "mp3"
+    if format == "flac":
+        ext = "flac"
+
+    trk_path = os.path.join(TEMP_DOWNLOAD_DIRECTORY, f"{str(id)}_{format}.{ext}")
     with get(url, stream=True) as r:
-        size = r.headers["content-length"]
         r.raise_for_status()
         with open(trk_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-    return trk_path, size
+    return trk_path
 
 
-@register(outgoing=True, pattern=r"\.dz (.*) (128|320|flac)")
+@register(outgoing=True, pattern=r"\.dz (.*) (misc|128|320|flac)")
 async def dz(event):
-    format_num = FORMATS[event.pattern_match.group(2)]
-    track_id = event.pattern_match.group(1)
-
     await event.edit("**Getting track info...**")
 
-    url = f"https://connect.deezer.com/oauth/access_token.php?grant_type=client_credentials&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}&output=json"
+    api_path = f"track/{event.pattern_match.group(1)}"
     try:
-        token = (await get_json(url))["access_token"]
-    except Exception as e:
-        await event.edit(f"Error while getting access token:\n**{e}**")
-        return
-
-    url = f"https://api.deezer.com/track/{track_id}?access_token={token}"
-    try:
-        res = await get_json(url)
+        resp = await api_call(api_path)
     except Exception as e:
         await event.edit(f"Error while getting track info:\n**{e}**")
         return
 
+    id = resp["id"]
+    if id < 0:  # user-uploaded track
+        format = "misc"
+    else:
+        format = event.pattern_match.group(2)
+
+    filesize = resp["filesize_" + format]
+    if filesize in ["0", ""]:
+        await event.edit("**Format unavailable.**")
+        return
+    format_num = FORMATS[format]
+
     await event.edit("**Downloading...**")
 
-    md5_origin = res["md5_origin"]
-    id = res["id"]
-    if id < 0:  # user-uploaded track
-        format_num = "0"
-    media_version = res["media_version"]
+    md5_origin = resp["md5_origin"]
+    media_version = resp["media_version"]
     url = await track_url(md5_origin, format_num, id, media_version)
 
     try:
-        trk_path, size = await download_file(url, id)
+        trk_path = await download_file(url, id, format)
     except HTTPError:
         await event.edit("**Track unavailable.**")
         return
@@ -141,8 +157,8 @@ async def dz(event):
     await event.client.send_file(
         event.chat_id,
         trk_path,
-        caption=f"**{res['artist']['name']} - {res['title']}**",
-        file_size=int(size),
+        caption=f"**{resp['artist']['name']} - {resp['title']}**",
+        file_size=int(filesize),
         supports_streaming=True,
     )
 
