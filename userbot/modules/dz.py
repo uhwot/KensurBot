@@ -22,6 +22,7 @@
 
 """Download music from Deezer"""
 import os
+from time import time
 
 from requests import get
 from requests.models import HTTPError
@@ -73,7 +74,22 @@ async def get_json(url):
 
 
 async def get_access_token():
-    return (await get_json(TOKEN_URL))["access_token"]
+    try:
+        from userbot.modules.sql_helper.globals import gvarstatus, addgvar
+    except AttributeError:  # sql disabled
+        return (await get_json(TOKEN_URL))["access_token"]
+    
+    token = gvarstatus("dz_token")
+    expiry = float(gvarstatus("dz_token_expiry"))
+    if not token or not expiry or expiry <= time():
+        # getting new token from deezer and caching
+        resp = await get_json(TOKEN_URL)
+        token = resp["access_token"]
+        expiry = time() + int(resp["expires"])
+        addgvar("dz_token", token)
+        addgvar("dz_token_expiry", expiry)
+    
+    return token
 
 
 async def api_call(path):
