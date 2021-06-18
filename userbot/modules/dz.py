@@ -23,6 +23,7 @@
 """Download music from Deezer"""
 import os
 from time import time
+from urllib.parse import urlparse
 
 from requests import get
 from requests.models import HTTPError
@@ -134,12 +135,37 @@ async def download_file(url, id, format):
     return trk_path
 
 
+async def parse_url(url):
+    url = urlparse(url, "https")
+    if url.scheme not in ["http", "https"] \
+    or url.netloc not in ["deezer.com", "www.deezer.com", "deezer.page.link"]:
+        raise Exception()
+    
+    if url.netloc == "deezer.page.link":
+        resp = get(url.geturl(), allow_redirects=False)
+        resp.raise_for_status()
+        return await parse_url(resp.headers["location"])
+
+    path = url.path.split("/")
+    if len(path) not in [3, 4]:
+        raise Exception()
+    path.pop(0)
+    if len(path[0]) == 2:   # language
+        path.pop(0)
+
+    type = path[0]
+    id = int(path[1])
+    if type not in ["track"]:
+        raise Exception()
+    return type, id
+
+
 @register(outgoing=True, pattern=r"\.dz (.*) (misc|128|320|flac)")
 async def dz(event):
     try:
-        id = int(event.pattern_match.group(1))
-    except ValueError:
-        await event.edit("**Invalid track ID.**")
+        _, id = await parse_url(event.pattern_match.group(1))
+    except:
+        await event.edit("**Invalid URL.**")
         return
 
     await event.edit("**Getting track info...**")
