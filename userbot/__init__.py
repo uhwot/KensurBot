@@ -213,11 +213,6 @@ def migration_workaround():
     return None
 
 
-if HEROKU_APP_NAME is not None and HEROKU_API_KEY is not None:
-    # migration_workaround()
-    pass
-
-
 # 'bot' variable
 if STRING_SESSION:
     # pylint: disable=invalid-name
